@@ -28,13 +28,15 @@ namespace Umbraco.Web.Trees
         /// <param name="iconOpen">The icon open.</param>
         /// <param name="initialize">if set to <c>true</c> [initialize].</param>
         /// <param name="sortOrder">The sort order.</param>
+        /// <param name="isSingleNodeTree">Flag to define if this tree is a single node tree (will never contain child nodes, full screen app)</param>
         public TreeAttribute(string appAlias,
             string alias,
             string title,
             string iconClosed = "icon-folder",
             string iconOpen = "icon-folder-open",
             bool initialize = true,
-            int sortOrder = 0)
+            int sortOrder = 0,
+            bool isSingleNodeTree = false)
         {
             ApplicationAlias = appAlias;
             Alias = alias;
@@ -43,9 +45,8 @@ namespace Umbraco.Web.Trees
             IconOpen = iconOpen;
             Initialize = initialize;
             SortOrder = sortOrder;
+            IsSingleNodeTree = isSingleNodeTree;
         }
-
-
 
         public string ApplicationAlias { get; private set; }
         public string Alias { get; private set; }
@@ -54,5 +55,10 @@ namespace Umbraco.Web.Trees
         public string IconOpen { get; private set; }
         public bool Initialize { get; private set; }
         public int SortOrder { get; private set; }
+
+        /// <summary>
+        /// Flag to define if this tree is a single node tree (will never contain child nodes, full screen app)
+        /// </summary>
+        public bool IsSingleNodeTree { get; private set; }
     }
 }

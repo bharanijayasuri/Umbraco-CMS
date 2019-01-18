@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using LightInject;
 using NPoco;
 using Umbraco.Core.Cache;
 using Umbraco.Core.Configuration.UmbracoSettings;
@@ -30,13 +29,11 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
         private readonly ViewHelper _viewHelper;
         private readonly MasterPageHelper _masterPageHelper;
 
-        public TemplateRepository(IScopeAccessor scopeAccessor, CacheHelper cache, ILogger logger, ITemplatesSection templateConfig,
-                [Inject(Constants.Composing.FileSystems.MasterpageFileSystem)] IFileSystem masterpageFileSystem,
-                [Inject(Constants.Composing.FileSystems.ViewFileSystem)] IFileSystem viewFileSystem)
+        public TemplateRepository(IScopeAccessor scopeAccessor, CacheHelper cache, ILogger logger, ITemplatesSection templateConfig, IFileSystems fileSystems)
             : base(scopeAccessor, cache, logger)
         {
-            _masterpagesFileSystem = masterpageFileSystem;
-            _viewsFileSystem = viewFileSystem;
+            _masterpagesFileSystem = fileSystems.MasterPagesFileSystem;
+            _viewsFileSystem = fileSystems.MvcViewsFileSystem;
             _templateConfig = templateConfig;
             _viewHelper = new ViewHelper(_viewsFileSystem);
             _masterPageHelper = new MasterPageHelper(_masterpagesFileSystem);
@@ -152,7 +149,7 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
             //Save to db
             var template = (Template)entity;
             template.AddingEntity();
-            
+
             var dto = TemplateFactory.BuildDto(template, NodeObjectTypeId, template.Id);
 
             //Create the (base) node data - umbracoNode
@@ -181,7 +178,7 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
             template.Path = nodeDto.Path;
 
             //now do the file work
-            SaveFile(template, dto);
+            SaveFile(template);
 
             template.ResetDirtyProperties();
 
@@ -236,7 +233,7 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
             template.IsMasterTemplate = axisDefs.Any(x => x.ParentId == dto.NodeId);
 
             //now do the file work
-            SaveFile((Template) entity, dto, originalAlias);
+            SaveFile((Template) entity, originalAlias);
 
             entity.ResetDirtyProperties();
 
@@ -245,7 +242,7 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
                 template.GetFileContent = file => GetFileContent((Template) file, false);
         }
 
-        private void SaveFile(Template template, TemplateDto dto, string originalAlias = null)
+        private void SaveFile(Template template, string originalAlias = null)
         {
             string content;
 
@@ -275,10 +272,6 @@ namespace Umbraco.Core.Persistence.Repositories.Implement
             // once content has been set, "template on disk" are not "on disk" anymore
             template.Content = content;
             SetVirtualPath(template);
-
-            if (dto.Design == content) return;
-            dto.Design = content;
-            Database.Update(dto); // though... we don't care about the db value really??!!
         }
 
         protected override void PersistDeletedItem(ITemplate entity)

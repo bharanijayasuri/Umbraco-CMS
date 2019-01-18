@@ -1,18 +1,12 @@
 //used for the media picker dialog
 angular.module("umbraco").controller("Umbraco.Editors.TreePickerController",
     function ($scope,
-        $q,
         entityResource,
         eventsService,
-        $log,
-        searchService,
         angularHelper,
         $timeout,
         localizationService,
         treeService,
-        contentResource,
-        mediaResource,
-        memberResource,
         languageResource) {
 
         //used as the result selection
@@ -60,6 +54,7 @@ angular.module("umbraco").controller("Umbraco.Editors.TreePickerController",
         vm.toggleLanguageSelector = toggleLanguageSelector;
         vm.selectLanguage = selectLanguage;
         vm.onSearchResults = onSearchResults;
+        vm.selectResult = selectResult;
         vm.hideSearch = hideSearch;
         vm.closeMiniListView = closeMiniListView;
         vm.selectListViewNode = selectListViewNode;
@@ -376,7 +371,7 @@ angular.module("umbraco").controller("Umbraco.Editors.TreePickerController",
             var foundIndex = 0;
 
             if ($scope.model.selection.length > 0) {
-                for (i = 0; $scope.model.selection.length > i; i++) {
+                for (var i = 0; $scope.model.selection.length > i; i++) {
                     var selectedItem = $scope.model.selection[i];
                     if (selectedItem.id === item.id) {
                         found = true;

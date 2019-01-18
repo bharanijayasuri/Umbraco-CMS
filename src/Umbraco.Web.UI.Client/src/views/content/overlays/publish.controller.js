@@ -6,11 +6,12 @@
         var vm = this;
         vm.loading = true;
         vm.hasPristineVariants = false;
+        vm.isNew = true;
 
         vm.changeSelection = changeSelection;
         vm.dirtyVariantFilter = dirtyVariantFilter;
         vm.pristineVariantFilter = pristineVariantFilter;
-        
+
         /** Returns true if publishing is possible based on if there are un-published mandatory languages */
         function canPublish() {
             var selected = [];
@@ -19,11 +20,12 @@
 
                 //if this variant will show up in the publish-able list
                 var publishable = dirtyVariantFilter(variant);
+                var published = !(variant.state === "NotCreated" || variant.state === "Draft");
 
-                if ((variant.language.isMandatory && (variant.state === "NotCreated" || variant.state === "Draft"))
-                    && (!publishable || !variant.publish)) {
-                    //if a mandatory variant isn't published and it's not publishable or not selected to be published
-                    //then we cannot publish anything
+                if ((variant.language.isMandatory && !published) && (!publishable || !variant.publish)) {
+                    //if a mandatory variant isn't published
+                    //and it's not publishable or not selected to be published
+                    //then we cannot continue
 
                     //TODO: Show a message when this occurs
                     return false;
@@ -52,11 +54,34 @@
             return (variant.active || variant.isDirty || variant.state === "Draft" || variant.state === "PublishedPendingChanges" || variant.state === "NotCreated");
         }
 
+        function hasAnyData(variant) {
+            var result = variant.isDirty != null || (variant.name != null && variant.name.length > 0);
+
+            if(result) return true;
+
+            for (var t=0; t < variant.tabs.length; t++){
+                for (var p=0; p < variant.tabs[t].properties.length; p++){
+
+                    var property = variant.tabs[t].properties[p];
+
+                    if(property.culture == null) continue;
+
+                    result = result ||  (property.value != null && property.value.length > 0);
+
+                    if(result) return true;
+                }
+            }
+
+            return result;
+        }
+
         function pristineVariantFilter(variant) {
             return !(dirtyVariantFilter(variant));
         }
 
         function onInit() {
+
+
 
             vm.variants = $scope.model.variants;
 
@@ -70,12 +95,23 @@
 
             _.each(vm.variants,
                 function (variant) {
+                    if(variant.state !== "NotCreated"){
+                        vm.isNew = false;
+                    }
+                });
+
+            _.each(vm.variants,
+                function (variant) {
                     variant.compositeId = variant.language.culture + "_" + (variant.segment ? variant.segment : "");
                     variant.htmlId = "_content_variant_" + variant.compositeId;
 
                     //check for pristine variants
                     if (!vm.hasPristineVariants) {
                         vm.hasPristineVariants = pristineVariantFilter(variant);
+                    }
+
+                    if(vm.isNew && hasAnyData(variant)){
+                        variant.save = true;
                     }
                 });
 
@@ -102,8 +138,16 @@
                 $scope.model.disableSubmitButton = true;
             }
 
-            vm.loading = false;
-            
+            var labelKey =  vm.isNew ? "content_languagesToPublishForFirstTime" : "content_languagesToPublish";
+
+            localizationService.localize(labelKey).then(function (value) {
+                vm.headline = value;
+
+                vm.loading = false;
+            });
+
+
+
         }
 
         onInit();

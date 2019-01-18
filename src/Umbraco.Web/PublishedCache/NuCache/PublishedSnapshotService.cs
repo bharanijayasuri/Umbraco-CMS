@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using System.Web.Hosting;
 using CSharpTest.Net.Collections;
 using Newtonsoft.Json;
 using Umbraco.Core;
@@ -15,7 +14,6 @@ using Umbraco.Core.Models;
 using Umbraco.Core.Models.Membership;
 using Umbraco.Core.Models.PublishedContent;
 using Umbraco.Core.Persistence;
-using Umbraco.Core.Persistence.DatabaseModelDefinitions;
 using Umbraco.Core.Persistence.Dtos;
 using Umbraco.Core.Persistence.Repositories;
 using Umbraco.Core.Persistence.Repositories.Implement;
@@ -26,7 +24,6 @@ using Umbraco.Core.Services.Implement;
 using Umbraco.Web.Cache;
 using Umbraco.Web.Install;
 using Umbraco.Web.PublishedCache.NuCache.DataSource;
-using Umbraco.Web.PublishedCache.XmlPublishedCache;
 using Umbraco.Web.Routing;
 
 namespace Umbraco.Web.PublishedCache.NuCache
@@ -43,6 +40,7 @@ namespace Umbraco.Web.PublishedCache.NuCache
         private readonly IMemberRepository _memberRepository;
         private readonly IGlobalSettings _globalSettings;
         private readonly ISiteDomainHelper _siteDomainHelper;
+        private readonly IEntityXmlSerializer _entitySerializer;
         private readonly IDefaultCultureAccessor _defaultCultureAccessor;
 
         // volatile because we read it with no lock
@@ -79,13 +77,14 @@ namespace Umbraco.Web.PublishedCache.NuCache
 
         //private static int _singletonCheck;
 
-        public PublishedSnapshotService(Options options, MainDom mainDom, IRuntimeState runtime,
+        public PublishedSnapshotService(Options options, IMainDom mainDom, IRuntimeState runtime,
             ServiceContext serviceContext, IPublishedContentTypeFactory publishedContentTypeFactory, IdkMap idkMap,
             IPublishedSnapshotAccessor publishedSnapshotAccessor, IVariationContextAccessor variationContextAccessor,
             ILogger logger, IScopeProvider scopeProvider,
             IDocumentRepository documentRepository, IMediaRepository mediaRepository, IMemberRepository memberRepository,
             IDefaultCultureAccessor defaultCultureAccessor,
-            IDataSource dataSource, IGlobalSettings globalSettings, ISiteDomainHelper siteDomainHelper)
+            IDataSource dataSource, IGlobalSettings globalSettings, ISiteDomainHelper siteDomainHelper,
+            IEntityXmlSerializer entitySerializer)
             : base(publishedSnapshotAccessor, variationContextAccessor)
         {
             //if (Interlocked.Increment(ref _singletonCheck) > 1)
@@ -102,6 +101,10 @@ namespace Umbraco.Web.PublishedCache.NuCache
             _defaultCultureAccessor = defaultCultureAccessor;
             _globalSettings = globalSettings;
             _siteDomainHelper = siteDomainHelper;
+
+            // we need an Xml serializer here so that the member cache can support XPath,
+            // for members this is done by navigating the serialized-to-xml member
+            _entitySerializer = entitySerializer;
 
             // we always want to handle repository events, configured or not
             // assuming no repository event will trigger before the whole db is ready
@@ -133,8 +136,8 @@ namespace Umbraco.Web.PublishedCache.NuCache
 
                 if (registered)
                 {
-                    var localContentDbPath = HostingEnvironment.MapPath("~/App_Data/NuCache.Content.db");
-                    var localMediaDbPath = HostingEnvironment.MapPath("~/App_Data/NuCache.Media.db");
+                    var localContentDbPath = IOHelper.MapPath("~/App_Data/NuCache.Content.db");
+                    var localMediaDbPath = IOHelper.MapPath("~/App_Data/NuCache.Media.db");
                     _localDbExists = System.IO.File.Exists(localContentDbPath) && System.IO.File.Exists(localMediaDbPath);
 
                     // if both local dbs exist then GetTree will open them, else new dbs will be created
@@ -1011,7 +1014,7 @@ namespace Umbraco.Web.PublishedCache.NuCache
             {
                 ContentCache = new ContentCache(previewDefault, contentSnap, snapshotCache, elementsCache, domainHelper, _globalSettings, _serviceContext.LocalizationService),
                 MediaCache = new MediaCache(previewDefault, mediaSnap, snapshotCache, elementsCache),
-                MemberCache = new MemberCache(previewDefault, snapshotCache, _serviceContext.MemberService, _serviceContext.DataTypeService, _serviceContext.LocalizationService, memberTypeCache, PublishedSnapshotAccessor, VariationContextAccessor),
+                MemberCache = new MemberCache(previewDefault, snapshotCache, _serviceContext.MemberService, memberTypeCache, PublishedSnapshotAccessor, VariationContextAccessor, _entitySerializer),
                 DomainCache = domainCache,
                 SnapshotCache = snapshotCache,
                 ElementsCache = elementsCache
@@ -1160,6 +1163,10 @@ namespace Umbraco.Web.PublishedCache.NuCache
                 var pdatas = new List<PropertyData>();
                 foreach (var pvalue in prop.Values)
                 {
+                    // sanitize - properties should be ok but ... never knows
+                    if (!prop.PropertyType.SupportsVariation(pvalue.Culture, pvalue.Segment))
+                        continue;
+
                     // note: at service level, invariant is 'null', but here invariant becomes 'string.Empty'
                     var value = published ? pvalue.PublishedValue : pvalue.EditedValue;
                     if (value != null)
@@ -1191,15 +1198,20 @@ namespace Umbraco.Web.PublishedCache.NuCache
 
             var cultureData = new Dictionary<string, CultureVariation>();
 
-            var names = content is IContent document
+            // sanitize - names should be ok but ... never knows
+            if (content.GetContentType().VariesByCulture())
+            {
+                var infos = content is IContent document
                     ? (published
                         ? document.PublishCultureInfos
                         : document.CultureInfos)
                     : content.CultureInfos;
 
-            foreach (var (culture, name) in names)
-            {
-                cultureData[culture] = new CultureVariation { Name = name.Name, Date = content.GetUpdateDate(culture) ?? DateTime.MinValue };
+                foreach (var (culture, info) in infos)
+                {
+                    var cultureIsDraft = !published && content is IContent d && d.IsCultureEdited(culture);
+                    cultureData[culture] = new CultureVariation { Name = info.Name, Date = content.GetUpdateDate(culture) ?? DateTime.MinValue, IsDraft = cultureIsDraft };
+                }
             }
 
             //the dictionary that will be serialized

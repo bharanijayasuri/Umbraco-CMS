@@ -26,6 +26,7 @@ namespace Umbraco.Core.Models
         private string _thumbnail = "folder.png";
         private bool _allowedAsRoot; // note: only one that's not 'pure element type'
         private bool _isContainer;
+        private bool _isElement;
         private PropertyGroupCollection _propertyGroups;
         private PropertyTypeCollection _noGroupPropertyTypes;
         private IEnumerable<ContentTypeSort> _allowedContentTypes;
@@ -90,10 +91,11 @@ namespace Umbraco.Core.Models
             public readonly PropertyInfo IconSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, string>(x => x.Icon);
             public readonly PropertyInfo ThumbnailSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, string>(x => x.Thumbnail);
             public readonly PropertyInfo AllowedAsRootSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, bool>(x => x.AllowedAsRoot);
+            public readonly PropertyInfo IsElementSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, bool>(x => x.IsElement);
             public readonly PropertyInfo IsContainerSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, bool>(x => x.IsContainer);
             public readonly PropertyInfo AllowedContentTypesSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, IEnumerable<ContentTypeSort>>(x => x.AllowedContentTypes);
-            public readonly PropertyInfo PropertyGroupCollectionSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, PropertyGroupCollection>(x => x.PropertyGroups);
-            public readonly PropertyInfo PropertyTypeCollectionSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, IEnumerable<PropertyType>>(x => x.PropertyTypes);
+            public readonly PropertyInfo PropertyGroupsSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, PropertyGroupCollection>(x => x.PropertyGroups);
+            public readonly PropertyInfo PropertyTypesSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, IEnumerable<PropertyType>>(x => x.PropertyTypes);
             public readonly PropertyInfo HasPropertyTypeBeenRemovedSelector = ExpressionHelper.GetPropertyInfo<ContentTypeBase, bool>(x => x.HasPropertyTypeBeenRemoved);
             public readonly PropertyInfo VaryBy = ExpressionHelper.GetPropertyInfo<ContentTypeBase, ContentVariation>(x => x.Variations);
 
@@ -106,12 +108,12 @@ namespace Umbraco.Core.Models
 
         protected void PropertyGroupsChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            OnPropertyChanged(Ps.Value.PropertyGroupCollectionSelector);
+            OnPropertyChanged(Ps.Value.PropertyGroupsSelector);
         }
 
         protected void PropertyTypesChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            OnPropertyChanged(Ps.Value.PropertyTypeCollectionSelector);
+            OnPropertyChanged(Ps.Value.PropertyTypesSelector);
         }
 
         /// <summary>
@@ -178,6 +180,14 @@ namespace Umbraco.Core.Models
         {
             get => _isContainer;
             set => SetPropertyValueAndDetectChanges(value, ref _isContainer, Ps.Value.IsContainerSelector);
+        }
+
+        /// <inheritdoc />
+        [DataMember]
+        public bool IsElement
+        {
+            get => _isElement;
+            set => SetPropertyValueAndDetectChanges(value, ref _isElement, Ps.Value.IsElementSelector);
         }
 
         /// <summary>
@@ -263,6 +273,8 @@ namespace Umbraco.Core.Models
             get => _noGroupPropertyTypes;
             set
             {
+                if (_noGroupPropertyTypes != null)
+                    _noGroupPropertyTypes.CollectionChanged -= PropertyTypesChanged;
                 _noGroupPropertyTypes = new PropertyTypeCollection(IsPublishing, value);
                 _noGroupPropertyTypes.CollectionChanged += PropertyTypesChanged;
                 PropertyTypesChanged(_noGroupPropertyTypes, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
@@ -376,7 +388,7 @@ namespace Umbraco.Core.Models
                     if (!HasPropertyTypeBeenRemoved)
                     {
                         HasPropertyTypeBeenRemoved = true;
-                        OnPropertyChanged(Ps.Value.PropertyTypeCollectionSelector);
+                        OnPropertyChanged(Ps.Value.PropertyTypesSelector);
                     }
                     break;
                 }
@@ -388,7 +400,7 @@ namespace Umbraco.Core.Models
                 if (!HasPropertyTypeBeenRemoved)
                 {
                     HasPropertyTypeBeenRemoved = true;
-                    OnPropertyChanged(Ps.Value.PropertyTypeCollectionSelector);
+                    OnPropertyChanged(Ps.Value.PropertyTypesSelector);
                 }
             }
         }
@@ -412,7 +424,7 @@ namespace Umbraco.Core.Models
 
             // actually remove the group
             PropertyGroups.RemoveItem(propertyGroupName);
-            OnPropertyChanged(Ps.Value.PropertyGroupCollectionSelector);
+            OnPropertyChanged(Ps.Value.PropertyGroupsSelector);
         }
 
         /// <summary>
@@ -467,35 +479,29 @@ namespace Umbraco.Core.Models
             }
         }
 
-        public override object DeepClone()
+        protected override void PerformDeepClone(object clone)
         {
-            var clone = (ContentTypeBase) base.DeepClone();
+            base.PerformDeepClone(clone);
 
-            //turn off change tracking
-            clone.DisableChangeTracking();
+            var clonedEntity = (ContentTypeBase) clone;
 
-            if (clone._noGroupPropertyTypes != null)
+            if (clonedEntity._noGroupPropertyTypes != null)
             {
                 //need to manually wire up the event handlers for the property type collections - we've ensured
                 // its ignored from the auto-clone process because its return values are unions, not raw and
                 // we end up with duplicates, see: http://issues.umbraco.org/issue/U4-4842
 
-                clone._noGroupPropertyTypes.CollectionChanged -= PropertyTypesChanged;                    //clear this event handler if any
-                clone._noGroupPropertyTypes = (PropertyTypeCollection) _noGroupPropertyTypes.DeepClone(); //manually deep clone
-                clone._noGroupPropertyTypes.CollectionChanged += clone.PropertyTypesChanged;              //re-assign correct event handler
+                clonedEntity._noGroupPropertyTypes.CollectionChanged -= PropertyTypesChanged;                    //clear this event handler if any
+                clonedEntity._noGroupPropertyTypes = (PropertyTypeCollection) _noGroupPropertyTypes.DeepClone(); //manually deep clone
+                clonedEntity._noGroupPropertyTypes.CollectionChanged += clonedEntity.PropertyTypesChanged;              //re-assign correct event handler
             }
 
-            if (clone._propertyGroups != null)
+            if (clonedEntity._propertyGroups != null)
             {
-                clone._propertyGroups.CollectionChanged -= PropertyGroupsChanged;              //clear this event handler if any
-                clone._propertyGroups = (PropertyGroupCollection) _propertyGroups.DeepClone(); //manually deep clone
-                clone._propertyGroups.CollectionChanged += clone.PropertyGroupsChanged;        //re-assign correct event handler
+                clonedEntity._propertyGroups.CollectionChanged -= PropertyGroupsChanged;              //clear this event handler if any
+                clonedEntity._propertyGroups = (PropertyGroupCollection) _propertyGroups.DeepClone(); //manually deep clone
+                clonedEntity._propertyGroups.CollectionChanged += clonedEntity.PropertyGroupsChanged;        //re-assign correct event handler
             }
-            
-            //re-enable tracking
-            clone.EnableChangeTracking();
-
-            return clone;
         }
 
         public IContentType DeepCloneWithResetIdentities(string alias)

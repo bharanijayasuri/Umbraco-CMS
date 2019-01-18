@@ -15,7 +15,8 @@ namespace Umbraco.Core.Models
         {
             var type = contentType.GetType();
             var itemType = PublishedItemType.Unknown;
-            if (typeof(IContentType).IsAssignableFrom(type)) itemType = PublishedItemType.Content;
+            if (contentType.IsElement) itemType = PublishedItemType.Element;
+            else if (typeof(IContentType).IsAssignableFrom(type)) itemType = PublishedItemType.Content;
             else if (typeof(IMediaType).IsAssignableFrom(type)) itemType = PublishedItemType.Media;
             else if (typeof(IMemberType).IsAssignableFrom(type)) itemType = PublishedItemType.Member;
             return itemType;
@@ -62,21 +63,6 @@ namespace Umbraco.Core.Models
 
             aliases = a;
             return hasAnyPropertyVariationChanged;
-        }
-
-        /// <summary>
-        /// Returns the list of content types the composition is used in
-        /// </summary>
-        /// <param name="allContentTypes"></param>
-        /// <param name="source"></param>
-        /// <returns></returns>
-        internal static IEnumerable<IContentTypeComposition> GetWhereCompositionIsUsedInContentTypes(this IContentTypeComposition source,
-            IContentTypeComposition[] allContentTypes)
-        {
-            var sourceId = source != null ? source.Id : 0;
-
-            // find which content types are using this composition
-            return allContentTypes.Where(x => x.ContentTypeComposition.Any(y => y.Id == sourceId)).ToArray();
         }
     }
 }

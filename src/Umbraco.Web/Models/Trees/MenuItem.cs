@@ -5,8 +5,9 @@ using System.Collections.Generic;
 using Umbraco.Core;
 using Umbraco.Core.Models.Entities;
 using Umbraco.Core.Services;
+using Umbraco.Web.Actions;
 using Umbraco.Web.Composing;
-using Umbraco.Web._Legacy.Actions;
+
 
 namespace Umbraco.Web.Models.Trees
 {
@@ -30,14 +31,27 @@ namespace Umbraco.Web.Models.Trees
             Name = name;
         }
 
-        public MenuItem(IAction legacyMenu, string name = "")
+
+        public MenuItem(string alias, ILocalizedTextService textService)
             : this()
         {
-            Name = name.IsNullOrWhiteSpace() ? legacyMenu.Alias : name;
-            Alias = legacyMenu.Alias;
-            SeperatorBefore = false;
-            Icon = legacyMenu.Icon;
-            Action = legacyMenu;
+            Alias = alias;
+            Name = textService.Localize($"actions/{Alias}");
+        }
+
+        /// <summary>
+        /// Create a menu item based on an <see cref="IAction"/> definition
+        /// </summary>
+        /// <param name="action"></param>
+        /// <param name="name"></param>
+        public MenuItem(IAction action, string name = "")
+            : this()
+        {
+            Name = name.IsNullOrWhiteSpace() ? action.Alias : name;
+            Alias = action.Alias;
+            SeparatorBefore = false;
+            Icon = action.Icon;
+            Action = action;
         }
         #endregion
 
@@ -66,11 +80,18 @@ namespace Umbraco.Web.Models.Trees
         /// <summary>
         /// Ensures a menu separator will exist before this menu item
         /// </summary>
-        [DataMember(Name = "seperator")]
-        public bool SeperatorBefore { get; set; }
+        [DataMember(Name = "separator")]
+        public bool SeparatorBefore { get; set; }
 
         [DataMember(Name = "cssclass")]
         public string Icon { get; set; }
+
+        /// <summary>
+        /// Used in the UI to inform the user that the menu item will open a dialog/confirmation
+        /// </summary>
+        [DataMember(Name = "opensDialog")]
+        public bool OpensDialog { get; set; }
+
         #endregion
 
         #region Constants
@@ -123,7 +144,7 @@ namespace Umbraco.Web.Models.Trees
         /// Adds the required meta data to the menu item so that angular knows to attempt to call the Js method.
         /// </summary>
         /// <param name="jsToExecute"></param>
-        public void ExecuteLegacyJs(string jsToExecute)
+        public void ExecuteJsMethod(string jsToExecute)
         {
             SetJsAction(jsToExecute);
         }
@@ -201,7 +222,7 @@ namespace Umbraco.Web.Models.Trees
                 }
             }
         }
-        
+
         #endregion
 
     }

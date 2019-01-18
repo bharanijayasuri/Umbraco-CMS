@@ -21,6 +21,10 @@ namespace Umbraco.Core.Models
 
         public PublicAccessEntry(IContent protectedNode, IContent loginNode, IContent noAccessNode, IEnumerable<PublicAccessRule> ruleCollection)
         {
+            if (protectedNode == null) throw new ArgumentNullException(nameof(protectedNode));
+            if (loginNode == null) throw new ArgumentNullException(nameof(loginNode));
+            if (noAccessNode == null) throw new ArgumentNullException(nameof(noAccessNode));
+
             LoginNodeId = loginNode.Id;
             NoAccessNodeId = noAccessNode.Id;
             _protectedNodeId = protectedNode.Id;
@@ -153,23 +157,17 @@ namespace Umbraco.Core.Models
             }
         }
 
-        public override object DeepClone()
+        protected override void PerformDeepClone(object clone)
         {
-            var clone = (PublicAccessEntry) base.DeepClone();
+            base.PerformDeepClone(clone);
 
-            //turn off change tracking
-            clone.DisableChangeTracking();
+            var cloneEntity = (PublicAccessEntry)clone;
 
-            if (clone._ruleCollection != null)
+            if (cloneEntity._ruleCollection != null)
             {
-                clone._ruleCollection.CollectionChanged -= _ruleCollection_CollectionChanged;       //clear this event handler if any
-                clone._ruleCollection.CollectionChanged += clone._ruleCollection_CollectionChanged; //re-assign correct event handler
+                cloneEntity._ruleCollection.CollectionChanged -= _ruleCollection_CollectionChanged;       //clear this event handler if any
+                cloneEntity._ruleCollection.CollectionChanged += cloneEntity._ruleCollection_CollectionChanged; //re-assign correct event handler
             }
-
-            //re-enable tracking
-            clone.EnableChangeTracking();
-
-            return clone;
         }
     }
 }

@@ -5,7 +5,7 @@
 * @description A helper service for most editors, some methods are specific to content/media/member model types but most are used by
 * all editors to share logic and reduce the amount of replicated code among editors.
 **/
-function contentEditingHelper(fileManager, $q, $location, $routeParams, notificationsService, navigationService, localizationService, serverValidationManager, dialogService, formHelper, appState) {
+function contentEditingHelper(fileManager, $q, $location, $routeParams, notificationsService, navigationService, localizationService, serverValidationManager, formHelper) {
 
     function isValidIdentifier(id) {
 
@@ -421,7 +421,7 @@ function contentEditingHelper(fileManager, $q, $location, $routeParams, notifica
          */
         reBindChangedProperties: function (origContent, savedContent) {
 
-            //TODO: We should probably split out this logic to deal with media/members seperately to content
+            //TODO: We should probably split out this logic to deal with media/members separately to content
 
             //a method to ignore built-in prop changes
             var shouldIgnore = function (propName) {
@@ -432,16 +432,8 @@ function contentEditingHelper(fileManager, $q, $location, $routeParams, notifica
                     "properties",
                     "apps",
                     "createDateFormatted",
-                    "releaseDateYear",
-                    "releaseDateMonth",
-                    "releaseDateDayNumber",
-                    "releaseDateDay",
-                    "releaseDateTime",
-                    "removeDateYear",
-                    "removeDateMonth",
-                    "removeDateDayNumber",
-                    "removeDateDay",
-                    "removeDateTime"
+                    "releaseDate",
+                    "expireDate"
                 ], function (i) {
                     return i === propName;
                 });

@@ -12,6 +12,19 @@
                 
                 //expose the property/methods for other directives to use
                 this.content = $scope.content;
+                this.activeVariant = _.find(this.content.variants, variant => {
+                    return variant.active;
+                });
+
+                $scope.activeVariant = this.activeVariant;
+
+                $scope.defaultVariant = _.find(this.content.variants, variant => {
+                    return variant.language.isDefault;
+                });
+
+                $scope.unlockInvariantValue = function(property) {
+                    property.unlockInvariantValue = !property.unlockInvariantValue;
+                };
 
                 $scope.$watch("tabbedContentForm.$dirty",
                     function (newValue, oldValue) {

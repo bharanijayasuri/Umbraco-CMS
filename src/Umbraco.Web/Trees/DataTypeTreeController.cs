@@ -5,13 +5,13 @@ using System.Net.Http.Formatting;
 using AutoMapper;
 using Umbraco.Core;
 using Umbraco.Core.Models;
+using Umbraco.Core.Models.Entities;
 using Umbraco.Web.Models.Trees;
 using Umbraco.Web.Mvc;
 using Umbraco.Web.WebApi.Filters;
 using Umbraco.Core.Services;
+using Umbraco.Web.Actions;
 using Umbraco.Web.Models.ContentEditing;
-using Umbraco.Web.Search;
-using Umbraco.Web._Legacy.Actions;
 using Constants = Umbraco.Core.Constants;
 
 namespace Umbraco.Web.Trees
@@ -89,7 +89,6 @@ namespace Umbraco.Web.Trees
                 Constants.DataTypes.DefaultContentListView,
                 Constants.DataTypes.DefaultMediaListView,
                 Constants.DataTypes.DefaultMembersListView
-
             };
         }
 
@@ -100,11 +99,11 @@ namespace Umbraco.Web.Trees
             if (id == Constants.System.Root.ToInvariantString())
             {
                 //set the default to create
-                menu.DefaultMenuAlias = ActionNew.Instance.Alias;
+                menu.DefaultMenuAlias = ActionNew.ActionAlias;
 
                 // root actions
-                menu.Items.Add<ActionNew>(Services.TextService.Localize($"actions/{ActionNew.Instance.Alias}"));
-                menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize("actions", ActionRefresh.Instance.Alias), true);
+                menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
+                menu.Items.Add(new RefreshNode(Services.TextService, true));
                 return menu;
             }
 
@@ -112,9 +111,9 @@ namespace Umbraco.Web.Trees
             if (container != null)
             {
                 //set the default to create
-                menu.DefaultMenuAlias = ActionNew.Instance.Alias;
+                menu.DefaultMenuAlias = ActionNew.ActionAlias;
 
-                menu.Items.Add<ActionNew>(Services.TextService.Localize($"actions/{ActionNew.Instance.Alias}"));
+                menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
 
                 menu.Items.Add(new MenuItem("rename", Services.TextService.Localize("actions/rename"))
                 {
@@ -124,28 +123,28 @@ namespace Umbraco.Web.Trees
                 if (container.HasChildren == false)
                 { 
                     //can delete data type
-                    menu.Items.Add<ActionDelete>(Services.TextService.Localize($"actions/{ActionDelete.Instance.Alias}"));
+                    menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true);
                 }
-                menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize(
-                    $"actions/{ActionRefresh.Instance.Alias}"), hasSeparator: true);
+                menu.Items.Add(new RefreshNode(Services.TextService, true));
             }
             else
             {
                 var nonDeletableSystemDataTypeIds = GetNonDeletableSystemDataTypeIds();
 
                 if (nonDeletableSystemDataTypeIds.Contains(int.Parse(id)) == false)
-                    menu.Items.Add<ActionDelete>(Services.TextService.Localize($"actions/{ActionDelete.Instance.Alias}"));
+                    menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true);
 
-                menu.Items.Add<ActionMove>(Services.TextService.Localize($"actions/{ActionMove.Instance.Alias}"), hasSeparator: true);
+                menu.Items.Add<ActionMove>(Services.TextService, hasSeparator: true, opensDialog: true);
             }
 
             return menu;
         }
 
-        public IEnumerable<SearchResultItem> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
+        public IEnumerable<SearchResultEntity> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
         {
-            var results = Services.EntityService.GetPagedDescendants(UmbracoObjectTypes.DataType, pageIndex, pageSize, out totalFound, filter: query);
-            return Mapper.Map<IEnumerable<SearchResultItem>>(results);
+            var results = Services.EntityService.GetPagedDescendants(UmbracoObjectTypes.DataType, pageIndex, pageSize, out totalFound,
+                filter: SqlContext.Query<IUmbracoEntity>().Where(x => x.Name.Contains(query)));
+            return Mapper.Map<IEnumerable<SearchResultEntity>>(results);
         }
     }
 }

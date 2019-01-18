@@ -32,7 +32,9 @@ namespace Umbraco.Web.Models.Mapping
             var contentTypeBasicResolver = new ContentTypeBasicResolver<IContent, ContentItemDisplay>();
             var defaultTemplateResolver = new DefaultTemplateResolver();
             var variantResolver = new ContentVariantResolver(localizationService);
-            
+            var schedPublishReleaseDateResolver = new ScheduledPublishDateResolver(ContentScheduleAction.Release);
+            var schedPublishExpireDateResolver = new ScheduledPublishDateResolver(ContentScheduleAction.Expire);
+
             //FROM IContent TO ContentItemDisplay
             CreateMap<IContent, ContentItemDisplay>()
                 .ForMember(dest => dest.Udi, opt => opt.MapFrom(src => Udi.Create(src.Blueprint ? Constants.UdiEntityType.DocumentBlueprint : Constants.UdiEntityType.Document, src.Key)))
@@ -44,6 +46,7 @@ namespace Umbraco.Web.Models.Mapping
                 .ForMember(dest => dest.ContentTypeAlias, opt => opt.MapFrom(src => src.ContentType.Alias))
                 .ForMember(dest => dest.ContentTypeName, opt => opt.MapFrom(src => src.ContentType.Name))
                 .ForMember(dest => dest.IsContainer, opt => opt.MapFrom(src => src.ContentType.IsContainer))
+                .ForMember(dest => dest.IsElement, opt => opt.MapFrom(src => src.ContentType.IsElement))
                 .ForMember(dest => dest.IsBlueprint, opt => opt.MapFrom(src => src.Blueprint))
                 .ForMember(dest => dest.IsChildOfListView, opt => opt.ResolveUsing(childOfListViewResolver))
                 .ForMember(dest => dest.Trashed, opt => opt.MapFrom(src => src.Trashed))
@@ -57,12 +60,14 @@ namespace Umbraco.Web.Models.Mapping
                 .ForMember(dest => dest.AllowedTemplates, opt =>
                     opt.MapFrom(content => content.ContentType.AllowedTemplates
                         .Where(t => t.Alias.IsNullOrWhiteSpace() == false && t.Name.IsNullOrWhiteSpace() == false)
-                        .ToDictionary(t => t.Alias, t => t.Name)))                
+                        .ToDictionary(t => t.Alias, t => t.Name)))
                 .ForMember(dest => dest.AllowedActions, opt => opt.ResolveUsing(src => actionButtonsResolver.Resolve(src)))
                 .ForMember(dest => dest.AdditionalData, opt => opt.Ignore());
 
             CreateMap<IContent, ContentVariantDisplay>()
                 .ForMember(dest => dest.PublishDate, opt => opt.MapFrom(src => src.PublishDate))
+                .ForMember(dest => dest.ReleaseDate, opt => opt.ResolveUsing(schedPublishReleaseDateResolver))
+                .ForMember(dest => dest.ExpireDate, opt => opt.ResolveUsing(schedPublishExpireDateResolver))
                 .ForMember(dest => dest.Segment, opt => opt.Ignore())
                 .ForMember(dest => dest.Language, opt => opt.Ignore())
                 .ForMember(dest => dest.Notifications, opt => opt.Ignore())
@@ -82,7 +87,8 @@ namespace Umbraco.Web.Models.Mapping
                 .ForMember(dest => dest.AdditionalData, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdateDate, opt => opt.ResolveUsing<UpdateDateResolver>())
                 .ForMember(dest => dest.Name, opt => opt.ResolveUsing<NameResolver>())
-                .ForMember(dest => dest.State, opt => opt.ResolveUsing<ContentBasicSavedStateResolver<ContentPropertyBasic>>());
+                .ForMember(dest => dest.State, opt => opt.ResolveUsing<ContentBasicSavedStateResolver<ContentPropertyBasic>>())
+                .ForMember(dest => dest.VariesByCulture, opt => opt.MapFrom(src => src.ContentType.VariesByCulture()));
 
             //FROM IContent TO ContentPropertyCollectionDto
             //NOTE: the property mapping for cultures relies on a culture being set in the mapping context
@@ -135,5 +141,5 @@ namespace Umbraco.Web.Models.Mapping
                 return source.CultureInfos.TryGetValue(culture, out var name) && !name.Name.IsNullOrWhiteSpace() ? name.Name : $"(({source.Name}))";
             }
         }
-    }    
+    }
 }

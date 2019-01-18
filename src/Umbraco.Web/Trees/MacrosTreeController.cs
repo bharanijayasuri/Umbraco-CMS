@@ -2,13 +2,11 @@
 using System.Linq;
 using System.Net.Http.Formatting;
 using Umbraco.Core;
-using Umbraco.Core.Models;
 using Umbraco.Core.Models.Entities;
 using Umbraco.Web.Models.Trees;
 using Umbraco.Web.Mvc;
 using Umbraco.Web.WebApi.Filters;
-using Umbraco.Core.Services;
-using Umbraco.Web._Legacy.Actions;
+using Umbraco.Web.Actions;
 using Constants = Umbraco.Core.Constants;
 
 namespace Umbraco.Web.Trees
@@ -58,23 +56,22 @@ namespace Umbraco.Web.Trees
             if (id == Constants.System.Root.ToInvariantString())
             {
                 //Create the normal create action
-                menu.Items.Add<ActionNew>(Services.TextService.Localize("actions", ActionNew.Instance.Alias))
+                menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true)
                     //Since we haven't implemented anything for macros in angular, this needs to be converted to
                     //use the legacy format
                     .ConvertLegacyMenuItem(null, "initmacros", queryStrings.GetValue<string>("application"));
 
                 //refresh action
-                menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize("actions", ActionRefresh.Instance.Alias), true);
+                menu.Items.Add(new RefreshNode(Services.TextService, true));
 
                 return menu;
             }
-
 
             var macro = Services.MacroService.GetById(int.Parse(id));
             if (macro == null) return new MenuItemCollection();
 
             //add delete option for all macros
-            menu.Items.Add<ActionDelete>(Services.TextService.Localize("actions", ActionDelete.Instance.Alias))
+            menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true)
                 //Since we haven't implemented anything for macros in angular, this needs to be converted to
                 //use the legacy format
                 .ConvertLegacyMenuItem(new EntitySlim

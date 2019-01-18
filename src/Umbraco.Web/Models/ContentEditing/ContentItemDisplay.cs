@@ -87,6 +87,12 @@ namespace Umbraco.Web.Models.ContentEditing
         public bool IsContainer { get; set; }
 
         /// <summary>
+        /// Indicates if the content is configured as an element
+        /// </summary>
+        [DataMember(Name = "isElement")]
+        public bool IsElement { get; set; }
+
+        /// <summary>
         /// Property indicating if this item is part of a list view parent
         /// </summary>
         [DataMember(Name = "isChildOfListView")]
@@ -118,13 +124,6 @@ namespace Umbraco.Web.Models.ContentEditing
         [DataMember(Name = "updateDate")]
         public DateTime UpdateDate { get; set; }
 
-        //TODO: These will need to be moved once we have scheduled publishing in per culture
-        [DataMember(Name = "releaseDate")]
-        public DateTime? ReleaseDate { get; set; }
-
-        [DataMember(Name = "removeDate")]
-        public DateTime? ExpireDate { get; set; }
-                
         [DataMember(Name = "template")]
         public string TemplateAlias { get; set; }
 

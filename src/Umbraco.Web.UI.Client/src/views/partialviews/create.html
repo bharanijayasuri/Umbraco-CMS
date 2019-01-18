@@ -18,13 +18,13 @@
                     <li class="umb-action">
                         <a href="" class="umb-action-link" ng-click="vm.showCreateFromSnippet()">
                             <i class="large icon icon-article"></i>
-                            <span class="menu-label"><localize key="create_newPartialViewFromSnippet">New partial view from snippet</localize></span>
+                            <span class="menu-label"><localize key="create_newPartialViewFromSnippet">New partial view from snippet</localize>...</span>
                         </a>
                     </li>
                     <li class="umb-action">
                         <a href="" class="umb-action-link" ng-click="vm.showCreateFolder()">
                             <i class="large icon icon-folder"></i>
-                            <span class="menu-label"><localize key="general_folder"></localize></span>
+                            <span class="menu-label"><localize key="general_folder"></localize>...</span>
                         </a>
                     </li>
                 </ul>
@@ -57,7 +57,7 @@
                     </div>
                 </div>
 
-                <umb-control-group label="Enter a folder name" hide-label="false">
+                <umb-control-group label="@create_enterFolderName" localize="label" hide-label="false">
                     <input type="text" name="folderName" ng-model="vm.folderName" class="umb-textstring textstring input-block-level" umb-auto-focus required />
                 </umb-control-group>
 
@@ -69,7 +69,7 @@
 
     <!-- Dialog footer -->
     <div class="umb-dialog-footer btn-toolbar umb-btn-toolbar">
-        <button class="btn btn-info" ng-click="nav.hideDialog(true)">
+        <button class="btn btn-info" ng-click="vm.close()">
             <localize key="buttons_somethingElse">Do something else</localize>
         </button>
     </div>

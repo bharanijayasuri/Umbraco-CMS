@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Web;
+using System.Web.Hosting;
 using Umbraco.Core;
 using Umbraco.Core.Configuration;
+using Umbraco.Core.Composing;
 using Umbraco.Core.Configuration.UmbracoSettings;
 using Umbraco.Core.Models.PublishedContent;
-using Umbraco.Core.Services;
 using Umbraco.Web.PublishedCache;
 using Umbraco.Web.Routing;
 using Umbraco.Web.Runtime;
@@ -89,6 +91,35 @@ namespace Umbraco.Web
             // create & assign to accessor, dispose existing if any
             umbracoContextAccessor.UmbracoContext?.Dispose();
             return umbracoContextAccessor.UmbracoContext = new UmbracoContext(httpContext, publishedSnapshotService, webSecurity, umbracoSettings, urlProviders, globalSettings, variationContextAccessor);
+        }
+
+        /// <summary>
+        /// Gets a disposable object representing the presence of a current UmbracoContext.
+        /// </summary>
+        /// <remarks>
+        /// <para>The disposable object should be used in a using block: using (UmbracoContext.EnsureContext()) { ... }.</para>
+        /// <para>If an actual current UmbracoContext is already present, the disposable object is null and this method does nothing.</para>
+        /// <para>Otherwise, a temporary, dummy UmbracoContext is created and registered in the accessor. And disposed and removed from the accessor.</para>
+        /// </remarks>
+        internal static IDisposable EnsureContext(HttpContextBase httpContext = null) // keep this internal for now!
+        {
+            if (Composing.Current.UmbracoContext != null) return null;
+
+            httpContext = httpContext ?? new HttpContextWrapper(System.Web.HttpContext.Current ?? new HttpContext(new SimpleWorkerRequest("temp.aspx", "", new StringWriter())));
+
+            return EnsureContext(
+                Composing.Current.UmbracoContextAccessor,
+                httpContext,
+                Composing.Current.PublishedSnapshotService,
+                new WebSecurity(httpContext, Composing.Current.Services.UserService, Composing.Current.Configs.Global()),
+                Composing.Current.Configs.Settings(),
+                Composing.Current.UrlProviders,
+                Composing.Current.Configs.Global(),
+                Composing.Current.Factory.GetInstance<IVariationContextAccessor>(),
+                true);
+
+            // when the context will be disposed, it will be removed from the accessor
+            // (see DisposeResources)
         }
 
         // initializes a new instance of the UmbracoContext class
@@ -215,6 +246,9 @@ namespace Umbraco.Web
         /// </summary>
         public HttpContextBase HttpContext { get; }
 
+        /// <summary>
+        /// Gets the variation context accessor.
+        /// </summary>
         public IVariationContextAccessor VariationContextAccessor { get; }
 
         /// <summary>

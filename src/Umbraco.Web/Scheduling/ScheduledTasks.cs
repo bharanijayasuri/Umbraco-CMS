@@ -20,18 +20,16 @@ namespace Umbraco.Web.Scheduling
         private static HttpClient _httpClient;
         private readonly IRuntimeState _runtime;
         private readonly IUmbracoSettingsSection _settings;
-        private readonly ILogger _logger;
-        private readonly ProfilingLogger _proflog;
+        private readonly IProfilingLogger _logger;
         private static readonly Hashtable ScheduledTaskTimes = new Hashtable();
 
         public ScheduledTasks(IBackgroundTaskRunner<RecurringTaskBase> runner, int delayMilliseconds, int periodMilliseconds,
-            IRuntimeState runtime, IUmbracoSettingsSection settings, ILogger logger, ProfilingLogger proflog)
+            IRuntimeState runtime, IUmbracoSettingsSection settings, IProfilingLogger logger)
             : base(runner, delayMilliseconds, periodMilliseconds)
         {
             _runtime = runtime;
             _settings = settings;
             _logger = logger;
-            _proflog = proflog;
         }
 
         private async Task ProcessTasksAsync(CancellationToken token)
@@ -59,7 +57,7 @@ namespace Umbraco.Web.Scheduling
                 {
                     var taskResult = await GetTaskByHttpAync(t.Url, token);
                     if (t.Log)
-                        _logger.Info<ScheduledTasks>(string.Format("{0} has been called with response: {1}", t.Alias, taskResult));
+                        _logger.Info<ScheduledTasks>("{TaskAlias} has been called with response: {TaskResult}", t.Alias, taskResult);
                 }
             }
         }
@@ -71,7 +69,7 @@ namespace Umbraco.Web.Scheduling
                 {
                     BaseAddress = _runtime.ApplicationUrl
                 };
-            
+
             var request = new HttpRequestMessage(HttpMethod.Get, url);
 
             //TODO: pass custom the authorization header, currently these aren't really secured!
@@ -109,7 +107,7 @@ namespace Umbraco.Web.Scheduling
                 return false; // do NOT repeat, going down
             }
 
-            using (_proflog.DebugDuration<ScheduledTasks>("Scheduled tasks executing", "Scheduled tasks complete"))
+            using (_logger.DebugDuration<ScheduledTasks>("Scheduled tasks executing", "Scheduled tasks complete"))
             {
                 try
                 {

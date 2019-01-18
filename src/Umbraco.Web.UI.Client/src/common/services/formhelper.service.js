@@ -7,7 +7,7 @@
  * A utility class used to streamline how forms are developed, to ensure that validation is check and displayed consistently and to ensure that the correct events
  * fire when they need to.
  */
-function formHelper(angularHelper, serverValidationManager, $timeout, notificationsService, dialogService) {
+function formHelper(angularHelper, serverValidationManager, notificationsService, overlayService) {
     return {
 
         /**
@@ -110,7 +110,7 @@ function formHelper(angularHelper, serverValidationManager, $timeout, notificati
             //Or, some strange server error
             if (err.status === 400) {
                 //now we need to look through all the validation errors
-                if (err.data && (err.data.ModelState)) {
+                if (err.data && err.data.ModelState) {
 
                     //wire up the server validation errs
                     this.handleServerValidation(err.data.ModelState);
@@ -118,9 +118,11 @@ function formHelper(angularHelper, serverValidationManager, $timeout, notificati
                     //execute all server validation events and subscribers
                     serverValidationManager.notifyAndClearAllSubscriptions();                    
                 }
-                else {
-                    dialogService.ysodDialog(err);
-                }
+            }
+            else {
+
+                //TODO: All YSOD handling should be done with an interceptor
+                overlayService.ysod(err);
             }
             
         },

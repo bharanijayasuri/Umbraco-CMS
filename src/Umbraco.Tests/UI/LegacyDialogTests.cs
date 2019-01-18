@@ -23,8 +23,7 @@ namespace Umbraco.Tests.UI
             }
         }
         
-        [TestCase(typeof(macroTasks), Constants.Applications.Packages)]
-        [TestCase(typeof(CreatedPackageTasks), Constants.Applications.Packages)]
+        [TestCase(typeof(macroTasks), Constants.Applications.Settings)]
         public void Check_Assigned_Apps_For_Tasks(Type taskType, string app)
         {
             var task = (LegacyDialogTask)Activator.CreateInstance(taskType);

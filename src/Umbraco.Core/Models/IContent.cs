@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 namespace Umbraco.Core.Models
 {
+
     /// <summary>
     /// Represents a document.
     /// </summary>
@@ -12,9 +13,14 @@ namespace Umbraco.Core.Models
     public interface IContent : IContentBase
     {
         /// <summary>
-        /// Gets or sets the template used to render the content.
+        /// Gets or sets the content schedule
         /// </summary>
-        ITemplate Template { get; set; }
+        ContentScheduleCollection ContentSchedule { get; set; }
+
+        /// <summary>
+        /// Gets or sets the template id used to render the content.
+        /// </summary>
+        int? TemplateId { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether the content is published.
@@ -39,10 +45,10 @@ namespace Umbraco.Core.Models
         bool Blueprint { get; }
 
         /// <summary>
-        /// Gets the template used to render the published version of the content.
+        /// Gets the template id used to render the published version of the content.
         /// </summary>
         /// <remarks>When editing the content, the template can change, but this will not until the content is published.</remarks>
-        ITemplate PublishTemplate { get; }
+        int? PublishTemplateId { get; }
 
         /// <summary>
         /// Gets the name of the published version of the content.
@@ -61,24 +67,9 @@ namespace Umbraco.Core.Models
         DateTime? PublishDate { get; }
 
         /// <summary>
-        /// Gets or sets the date and time the content item should be published.
-        /// </summary>
-        DateTime? ReleaseDate { get; set; }
-
-        /// <summary>
-        /// Gets or sets the date and time the content should be unpublished.
-        /// </summary>
-        DateTime? ExpireDate { get; set; }
-
-        /// <summary>
         /// Gets the content type of this content.
         /// </summary>
         IContentType ContentType { get; }
-
-        /// <summary>
-        /// Gets the current status of the content.
-        /// </summary>
-        ContentStatus Status { get; }
 
         /// <summary>
         /// Gets a value indicating whether a culture is published.
@@ -89,6 +80,7 @@ namespace Umbraco.Core.Models
         /// whenever values for this culture are unpublished.</para>
         /// <para>A culture becomes published as soon as PublishCulture has been invoked,
         /// even though the document might now have been saved yet (and can have no identity).</para>
+        /// <para>Does not support the '*' wildcard (returns false).</para>
         /// </remarks>
         bool IsCulturePublished(string culture);
 
@@ -112,6 +104,7 @@ namespace Umbraco.Core.Models
         /// <para>A culture is edited when it is available, and not published or published but
         /// with changes.</para>
         /// <para>A culture can be edited even though the document might now have been saved yet (and can have no identity).</para>
+        /// <para>Does not support the '*' wildcard (returns false).</para>
         /// </remarks>
         bool IsCultureEdited(string culture);
 
@@ -172,7 +165,7 @@ namespace Umbraco.Core.Models
         /// </summary>
         /// <returns>A value indicating whether the culture can be published.</returns>
         /// <remarks>
-        /// <para>Fails if properties don't pass variant validtion rules.</para>
+        /// <para>Fails if properties don't pass variant validation rules.</para>
         /// <para>Publishing must be finalized via the content service SavePublishing method.</para>
         /// </remarks>
         bool PublishCulture(string culture = "*");

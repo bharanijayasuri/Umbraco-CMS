@@ -7,6 +7,7 @@ using System.IO;
 using System.Web.Security;
 using umbraco;
 using Umbraco.Core;
+using Umbraco.Core.Composing;
 using Umbraco.Core.Configuration.UmbracoSettings;
 using Umbraco.Core.IO;
 using Umbraco.Core.Logging;
@@ -20,13 +21,13 @@ namespace Umbraco.Web.Routing
 {
     // fixme - make this public
     // fixme - making sense to have an interface?
-    internal class PublishedRouter
+    public class PublishedRouter
     {
         private readonly IWebRoutingSection _webRoutingSection;
         private readonly ContentFinderCollection _contentFinders;
         private readonly IContentLastChanceFinder _contentLastChanceFinder;
         private readonly ServiceContext _services;
-        private readonly ProfilingLogger _profilingLogger;
+        private readonly IProfilingLogger _profilingLogger;
         private readonly IVariationContextAccessor _variationContextAccessor;
         private readonly ILogger _logger;
 
@@ -39,8 +40,7 @@ namespace Umbraco.Web.Routing
             IContentLastChanceFinder contentLastChanceFinder,
             IVariationContextAccessor variationContextAccessor,
             ServiceContext services,
-            ProfilingLogger proflog,
-            Func<string, IEnumerable<string>> getRolesForLogin = null)
+            IProfilingLogger proflog)
         {
             _webRoutingSection = webRoutingSection ?? throw new ArgumentNullException(nameof(webRoutingSection));
             _contentFinders = contentFinders ?? throw new ArgumentNullException(nameof(contentFinders));
@@ -48,9 +48,9 @@ namespace Umbraco.Web.Routing
             _services = services ?? throw new ArgumentNullException(nameof(services));
             _profilingLogger = proflog ?? throw new ArgumentNullException(nameof(proflog));
             _variationContextAccessor = variationContextAccessor ?? throw new ArgumentNullException(nameof(variationContextAccessor));
-            _logger = proflog.Logger;
+            _logger = proflog;
 
-            GetRolesForLogin = getRolesForLogin ?? (s => Roles.Provider.GetRolesForUser(s));
+            GetRolesForLogin = s => Roles.Provider.GetRolesForUser(s);
         }
 
         // fixme
@@ -494,8 +494,6 @@ namespace Umbraco.Web.Routing
         /// </remarks>
         private void HandlePublishedContent(PublishedRequest request)
         {
-            const string tracePrefix = "HandlePublishedContent: ";
-
             // because these might loop, we have to have some sort of infinite loop detection
             int i = 0, j = 0;
             const int maxLoop = 8;
@@ -628,7 +626,7 @@ namespace Umbraco.Web.Routing
             {
                 _logger.Debug<PublishedRouter>("EnsurePublishedContentAccess: Page is protected, check for access");
 
-                var membershipHelper = new MembershipHelper(request.UmbracoContext);
+                var membershipHelper = Current.Factory.GetInstance<MembershipHelper>();
 
                 if (membershipHelper.IsLoggedIn() == false)
                 {
@@ -639,7 +637,7 @@ namespace Umbraco.Web.Routing
                     if (loginPageId != request.PublishedContent.Id)
                         request.PublishedContent = request.UmbracoContext.PublishedSnapshot.Content.GetById(loginPageId);
                 }
-                else if (_services.PublicAccessService.HasAccess(request.PublishedContent.Id, _services.ContentService, GetRolesForLogin(membershipHelper.CurrentUserName)) == false)
+                else if (_services.PublicAccessService.HasAccess(request.PublishedContent.Id, _services.ContentService, membershipHelper.CurrentUserName, GetRolesForLogin(membershipHelper.CurrentUserName)) == false)
                 {
                     _logger.Debug<PublishedRouter>("EnsurePublishedContentAccess: Current member has not access, redirect to error page");
                     var errorPageId = publicAccessAttempt.Result.NoAccessNodeId;
@@ -648,7 +646,30 @@ namespace Umbraco.Web.Routing
                 }
                 else
                 {
-                    _logger.Debug<PublishedRouter>("EnsurePublishedContentAccess: Current member has access");
+                    // grab the current member
+                    var member = membershipHelper.GetCurrentMember();
+                    // if the member has the "approved" and/or "locked out" properties, make sure they're correctly set before allowing access
+                    var memberIsActive = true;
+                    if (member != null)
+                    {
+                        if (member.HasProperty(Constants.Conventions.Member.IsApproved) == false)
+                            memberIsActive = member.Value<bool>(Constants.Conventions.Member.IsApproved);
+
+                        if (member.HasProperty(Constants.Conventions.Member.IsLockedOut) == false)
+                            memberIsActive = member.Value<bool>(Constants.Conventions.Member.IsLockedOut) == false;
+                    }
+
+                    if (memberIsActive == false)
+                    {
+                        _logger.Debug<PublishedRouter>("Current member is either unapproved or locked out, redirect to error page");
+                        var errorPageId = publicAccessAttempt.Result.NoAccessNodeId;
+                        if (errorPageId != request.PublishedContent.Id)
+                            request.PublishedContent = request.UmbracoContext.PublishedSnapshot.Content.GetById(errorPageId);
+                    }
+                    else
+                    {
+                        _logger.Debug<PublishedRouter>("Current member has access");
+                    }
                 }
             }
             else
@@ -757,9 +778,9 @@ namespace Umbraco.Web.Routing
             }
         }
 
-        private ITemplate GetTemplateModel(int templateId)
+        private ITemplate GetTemplateModel(int? templateId)
         {
-            if (templateId <= 0)
+            if (templateId.HasValue == false)
             {
                 _logger.Debug<PublishedRouter>("GetTemplateModel: No template.");
                 return null;
@@ -767,7 +788,10 @@ namespace Umbraco.Web.Routing
 
             _logger.Debug<PublishedRouter>("GetTemplateModel: Get template id={TemplateId}", templateId);
 
-            var template = _services.FileService.GetTemplate(templateId);
+            if (templateId == null)
+                throw new InvalidOperationException("The template is not set, the page cannot render.");
+
+            var template = _services.FileService.GetTemplate(templateId.Value);
             if (template == null)
                 throw new InvalidOperationException("The template with Id " + templateId + " does not exist, the page cannot render.");
             _logger.Debug<PublishedRouter>("GetTemplateModel: Got template id={TemplateId} alias={TemplateAlias}", template.Id, template.Alias);

@@ -3,6 +3,13 @@
     position: relative;
 }
 
+.umb-nested-content-property-container {
+    position: relative;
+    &:not(:last-child){
+        margin-bottom: 12px;
+    }
+}
+
 .umb-nested-content--not-supported {
     opacity: 0.3;
     pointer-events: none;
@@ -207,26 +214,6 @@
 
 .form-horizontal .umb-nested-content--narrow .controls-row .umb-dropdown {
     width: 99%;
-}
-
-.usky-grid.umb-nested-content__node-type-picker {
-    .cell-tools-menu {
-        position: relative;
-        transform: translate(-50%, -25%);
-    }
-
-    .elements li {
-        &:hover {
-            i {
-                color: @white !important;
-            }
-        }
-
-        i {
-            // make sure the item icons shown are in the correct color according to their doc type icon instead of the grid editor item color
-            color: unset;
-        }
-    }
 }
 
 // this resolves the layout issue introduced in nested content in 7.12 with the addition of the input for link anchors

@@ -32,12 +32,10 @@
                                no-dirty-check />
 
                         <div class="form-search__toggle">
+                            <input type="checkbox" ng-model="showChilds" ng-change="toggle()" />
                             <label>
                                 <localize key="general_includeFromsubFolders">Include subfolders in search</localize>
                             </label>
-                            <umb-toggle checked="showChilds"
-                                        on-click="toggle()">
-                            </umb-toggle>
                         </div>
                     </div>
     
@@ -57,12 +55,12 @@
                     <ul class="umb-breadcrumbs">
                         <li ng-hide="startNodeId != -1" class="umb-breadcrumbs__ancestor">
                             <a href ng-click="gotoFolder()" prevent-default>Media</a>
-                            <span class="umb-breadcrumbs__seperator">&#47;</span>
+                            <span class="umb-breadcrumbs__separator">&#47;</span>
                         </li>
     
                         <li ng-repeat="item in path" class="umb-breadcrumbs__ancestor">
                             <a href ng-click="gotoFolder(item)" prevent-default>{{item.name}}</a>
-                            <span class="umb-breadcrumbs__seperator">&#47;</span>
+                            <span class="umb-breadcrumbs__separator">&#47;</span>
                         </li>
     
                         <li class="umb-breadcrumbs__ancestor" ng-show="!lockedFolder">
@@ -70,8 +68,8 @@
                                 <i class="icon icon-add small"></i>
                             </a>
     
-                            <input type="text" class="umb-breadcrumbs__add-ancestor" ng-show="showFolderInput" ng-model="newFolderName" ng-keydown="enterSubmitFolder($event)"
-                                on-blur="submitFolder()" focus-when="{{showFolderInput}}" />
+                            <input type="text" class="umb-breadcrumbs__add-ancestor" ng-show="showFolderInput" ng-model="model.newFolderName" ng-keydown="enterSubmitFolder($event)"
+                                ng-blur="submitFolder()" focus-when="{{showFolderInput}}" />
                         </li>
                     </ul>
                     <div class="umb-loader" ng-if="creatingFolder"></div>
@@ -173,6 +171,7 @@
             <umb-button
                 action="close()"
                 button-style="link"
+                shortcut="esc"
                 label="Close"
                 type="button">
             </umb-button>

@@ -194,7 +194,9 @@
                 return a.alias === "umbContent";
             });
 
-            contentApp.viewModel = _.omit(variant, 'apps');
+            //The view model for the content app is simply the index of the variant being edited
+            var variantIndex = vm.content.variants.indexOf(variant);
+            contentApp.viewModel = variantIndex;
 
             // make sure the same app it set to active in the new variant
             if(activeAppAlias) {
@@ -213,8 +215,14 @@
          * @param {any} selectedVariant
          */
         function openSplitView(selectedVariant) {
-
             var selectedCulture = selectedVariant.language.culture;
+
+            //Find the whole variant model based on the culture that was chosen
+            var variant = _.find(vm.content.variants, function (v) {
+                return v.language.culture === selectedCulture;
+            });
+
+            insertVariantEditor(vm.editors.length, initVariant(variant, vm.editors.length));
 
             //only the content app can be selected since no other apps are shown, and because we copy all of these apps
             //to the "editors" we need to update this across all editors
@@ -230,13 +238,6 @@
                     }
                 }
             }
-
-            //Find the whole variant model based on the culture that was chosen
-            var variant = _.find(vm.content.variants, function (v) {
-                return v.language.culture === selectedCulture;
-            });
-
-            insertVariantEditor(vm.editors.length, initVariant(variant, vm.editors.length));
 
             //TODO: hacking animation states - these should hopefully be easier to do when we upgrade angular
             editor.collapsed = true;
@@ -258,6 +259,8 @@
                 vm.editors.splice(editorIndex, 1);
                 //remove variant from open variants
                 vm.openVariants.splice(editorIndex, 1);
+                //update the current culture to reflect the last open variant (closing the split view corresponds to selecting the other variant)
+                $location.search("cculture", vm.openVariants[0]);
                 splitViewChanged();
             }, 400);
         }
@@ -268,7 +271,7 @@
          * @param {any} editorIndex The index of the editor being changed
          */
         function selectVariant(variant, editorIndex) {
-            
+
             // prevent variants already open in a split view to be opened
             if(vm.openVariants.indexOf(variant.language.culture) !== -1)  {
                 return;

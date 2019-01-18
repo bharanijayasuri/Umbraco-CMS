@@ -16,7 +16,7 @@
 
             // prevent two open overlays at the same time
             if(currentOverlay) {
-                return;
+                close();
             }
 
             var backdropOptions = {};
@@ -25,6 +25,11 @@
             // set the default overlay position to center
             if(!overlay.position) {
                 overlay.position = "center";
+            }
+
+            // use a default empty view if nothing is set
+            if(!overlay.view) {
+                overlay.view = "views/common/overlays/default/default.html";
             }
 
             // option to disable backdrop clicks
@@ -44,9 +49,21 @@
             eventsService.emit("appState.overlay", null);
         }
 
+        function ysod(error) {
+            const overlay = {
+                view: "views/common/overlays/ysod/ysod.html",
+                error: error,
+                close: function() {
+                    close();
+                }
+            };
+            open(overlay);
+        }
+
         var service = {
             open: open,
-            close: close
+            close: close,
+            ysod: ysod
         };
 
         return service;

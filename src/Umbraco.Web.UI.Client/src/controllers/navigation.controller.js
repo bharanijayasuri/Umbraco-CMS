@@ -9,7 +9,7 @@
  *
  * @param {navigationService} navigationService A reference to the navigationService
  */
-function NavigationController($scope, $rootScope, $location, $log, $q, $routeParams, $timeout, treeService, appState, navigationService, keyboardService, dialogService, historyService, eventsService, sectionResource, angularHelper, languageResource, contentResource) {
+function NavigationController($scope, $rootScope, $location, $log, $q, $routeParams, $timeout, $cookies, treeService, appState, navigationService, keyboardService, historyService, eventsService, angularHelper, languageResource, contentResource) {
 
     //this is used to trigger the tree to start loading once everything is ready
     var treeInitPromise = $q.defer();
@@ -113,16 +113,6 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         return treeInitPromise.promise;
     }
 
-    //TODO: Remove this, this is not healthy
-    // Put the navigation service on this scope so we can use it's methods/properties in the view.
-    // IMPORTANT: all properties assigned to this scope are generally available on the scope object on dialogs since
-    //   when we create a dialog we pass in this scope to be used for the dialog's scope instead of creating a new one.
-    $scope.nav = navigationService;
-    // TODO: Remove this, this is not healthy
-    // it is less than ideal to be passing in the navigationController scope to something else to be used as it's scope,
-    // this is going to lead to problems/confusion. I really don't think passing scope's around is very good practice.
-    $rootScope.nav = navigationService;
-
     //set up our scope vars
     $scope.showContextMenuDialog = false;
     $scope.showContextMenu = false;
@@ -147,12 +137,8 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         navigationService.showSearch();
     });
 
-    //trigger dialods with a hotkey:
-    keyboardService.bind("esc", function () {
-        eventsService.emit("app.closeDialogs");
-    });
-
-    $scope.selectedId = navigationService.currentId;
+    ////TODO: remove this it's not a thing
+    //$scope.selectedId = navigationService.currentId;
 
     var evts = [];
 
@@ -168,6 +154,9 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         if (args.key === "showMenuDialog") {
             $scope.showContextMenuDialog = args.value;
         }
+        if (args.key === "dialogTemplateUrl") {
+            $scope.dialogTemplateUrl = args.value;
+        }
         if (args.key === "showMenu") {
             $scope.showContextMenu = args.value;
         }
@@ -182,7 +171,7 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         }
     }));
 
-    //Listen for section state changes
+    //Listen for tree state changes
     evts.push(eventsService.on("appState.treeState.changed", function (e, args) {
         if (args.key === "currentRootNode") {
 
@@ -194,20 +183,23 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
                 $rootScope.emptySection = false;
             }
         }
-        
+
     }));
 
     //Listen for section state changes
     evts.push(eventsService.on("appState.sectionState.changed", function (e, args) {
+
         //section changed
         if (args.key === "currentSection" && $scope.currentSection != args.value) {
-            $scope.currentSection = args.value;
-
-            //load the tree
-            configureTreeAndLanguages();
-            $scope.treeApi.load({ section: $scope.currentSection, customTreeParams: $scope.customTreeParams, cacheKey: $scope.treeCacheKey });
-
+            //before loading the main tree we need to ensure that the nav is ready
+            navigationService.waitForNavReady().then(() => {
+                $scope.currentSection = args.value;
+                //load the tree
+                configureTreeAndLanguages();
+                $scope.treeApi.load({ section: $scope.currentSection, customTreeParams: $scope.customTreeParams, cacheKey: $scope.treeCacheKey });
+            });
         }
+        
         //show/hide search results
         if (args.key === "showSearchResults") {
             $scope.showSearchResults = args.value;
@@ -222,18 +214,20 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         });
     }));
 
-    evts.push(eventsService.on("editors.languages.languageCreated", function (e, args) {
-        loadLanguages().then(function (languages) {
-            $scope.languages = languages;
-        });
-    }));
-
-    //This reacts to clicks passed to the body element which emits a global call to close all dialogs
-    evts.push(eventsService.on("app.closeDialogs", function (event) {
-        if (appState.getGlobalState("stickyNavigation")) {
-            navigationService.hideNavigation();
-            //TODO: don't know why we need this? - we are inside of an angular event listener.
-            angularHelper.safeApply($scope);
+    //Emitted when a language is created or an existing one saved/edited
+    evts.push(eventsService.on("editors.languages.languageSaved", function (e, args) {
+        console.log('lang event listen args', args);
+        if(args.isNew){
+            //A new language has been created - reload languages for tree
+            loadLanguages().then(function (languages) {
+                $scope.languages = languages;
+            });
+        }
+        else if(args.language.isDefault){
+            //A language was saved and was set to be the new default (refresh the tree, so its at the top)
+            loadLanguages().then(function (languages) {
+                $scope.languages = languages;
+            });
         }
     }));
 
@@ -242,9 +236,18 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
         $scope.authenticated = false;
     }));
 
-    //when the application is ready and the user is authorized setup the data
+    //when the application is ready and the user is authorized, setup the data
     evts.push(eventsService.on("app.ready", function (evt, data) {
         init();
+    }));
+
+    // event for infinite editors
+    evts.push(eventsService.on("appState.editors.open", function (name, args) {
+        $scope.infiniteMode = args && args.editors.length > 0 ? true : false;
+    }));
+
+    evts.push(eventsService.on("appState.editors.close", function (name, args) {
+        $scope.infiniteMode = args && args.editors.length > 0 ? true : false;
     }));
 
     /**
@@ -307,12 +310,12 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
                     navInit = true;
                     initNav();
                 }
-                else {
-                    //keep track of the current section, when it changes change the state, and we listen for that event change above
-                    if ($scope.currentSection != $routeParams.section) {
-                        appState.setSectionState("currentSection", $routeParams.section);
-                    }
+
+                //keep track of the current section when it changes
+                if ($scope.currentSection != $routeParams.section) {
+                    appState.setSectionState("currentSection", $routeParams.section);
                 }
+
             }
         });
     }
@@ -341,9 +344,6 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
             $scope.languages = languages;
 
             if ($scope.languages.length > 1) {
-                var defaultLang = _.find($scope.languages, function (l) {
-                    return l.isDefault;
-                });
                 //if there's already one set, check if it exists
                 var currCulture = null;
                 var mainCulture = $location.search().mculture;
@@ -353,7 +353,20 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
                     });
                 }
                 if (!currCulture) {
-                    $location.search("mculture", defaultLang ? defaultLang.culture : null);
+                    // no culture in the request, let's look for one in the cookie that's set when changing language
+                    var defaultCulture = $cookies.get("UMB_MCULTURE");
+                    if (!defaultCulture || !_.find($scope.languages, function (l) {
+                            return l.culture.toLowerCase() === defaultCulture.toLowerCase();
+                        })) {
+                        // no luck either, look for the default language
+                        var defaultLang = _.find($scope.languages, function (l) {
+                            return l.isDefault;
+                        });
+                        if (defaultLang) {
+                            defaultCulture = defaultLang.culture;
+                        }
+                    }
+                    $location.search("mculture", defaultCulture ? defaultCulture : null);
                 }
             }
 
@@ -373,8 +386,7 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
 
                     //the nav is ready, let the app know
                     eventsService.emit("app.navigationReady", { treeApi: $scope.treeApi });
-                    //finally set the section state
-                    appState.setSectionState("currentSection", $routeParams.section);
+                    
                 }
             });
         });
@@ -389,6 +401,10 @@ function NavigationController($scope, $rootScope, $location, $log, $q, $routePar
     $scope.selectLanguage = function (language) {
 
         $location.search("mculture", language.culture);
+        // add the selected culture to a cookie so the user will log back into the same culture later on (cookie lifetime = one year)
+        var expireDate = new Date();
+        expireDate.setDate(expireDate.getDate() + 365);
+        $cookies.put("UMB_MCULTURE", language.culture, {path: "/", expires: expireDate});
 
         // close the language selector
         $scope.page.languageSelectorIsOpen = false;

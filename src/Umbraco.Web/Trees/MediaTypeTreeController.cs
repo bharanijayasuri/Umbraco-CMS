@@ -4,14 +4,14 @@ using System.Linq;
 using System.Net.Http.Formatting;
 using AutoMapper;
 using Umbraco.Core;
-using Umbraco.Core.Configuration;
+using Umbraco.Core.Composing;
 using Umbraco.Core.Models;
+using Umbraco.Core.Models.Entities;
 using Umbraco.Web.Models.Trees;
 using Umbraco.Web.WebApi.Filters;
 using Umbraco.Core.Services;
+using Umbraco.Web.Actions;
 using Umbraco.Web.Models.ContentEditing;
-using Umbraco.Web._Legacy.Actions;
-using Umbraco.Web.Search;
 
 namespace Umbraco.Web.Trees
 {
@@ -65,17 +65,16 @@ namespace Umbraco.Web.Trees
         {
             var menu = new MenuItemCollection();
 
-            var enableInheritedMediaTypes = UmbracoConfig.For.UmbracoSettings().Content.EnableInheritedMediaTypes;
+            var enableInheritedMediaTypes = Current.Configs.Settings().Content.EnableInheritedMediaTypes;
 
             if (id == Constants.System.Root.ToInvariantString())
             {
                 //set the default to create
-                menu.DefaultMenuAlias = ActionNew.Instance.Alias;
+                menu.DefaultMenuAlias = ActionNew.ActionAlias;
 
                 // root actions
-                menu.Items.Add<ActionNew>(Services.TextService.Localize($"actions/{ActionNew.Instance.Alias}"));
-                menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize(
-                    $"actions/{ActionRefresh.Instance.Alias}"));
+                menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
+                menu.Items.Add(new RefreshNode(Services.TextService));
                 return menu;
             }
 
@@ -83,9 +82,9 @@ namespace Umbraco.Web.Trees
             if (container != null)
             {
                 //set the default to create
-                menu.DefaultMenuAlias = ActionNew.Instance.Alias;
+                menu.DefaultMenuAlias = ActionNew.ActionAlias;
 
-                menu.Items.Add<ActionNew>(Services.TextService.Localize($"actions/{ActionNew.Instance.Alias}"));
+                menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
 
                 menu.Items.Add(new MenuItem("rename", Services.TextService.Localize("actions/rename"))
                 {
@@ -95,10 +94,9 @@ namespace Umbraco.Web.Trees
                 if (container.HasChildren == false)
                 {
                     //can delete doc type
-                    menu.Items.Add<ActionDelete>(Services.TextService.Localize($"actions/{ActionDelete.Instance.Alias}"));
+                    menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true);
                 }
-                menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize(
-                    $"actions/{ActionRefresh.Instance.Alias}"), hasSeparator: true);
+                menu.Items.Add(new RefreshNode(Services.TextService, true));
             }
             else
             {
@@ -107,38 +105,38 @@ namespace Umbraco.Web.Trees
 
                 if (enableInheritedMediaTypes)
                 {
-                    menu.Items.Add<ActionNew>(Services.TextService.Localize($"actions/{ActionNew.Instance.Alias}"));
+                    menu.Items.Add<ActionNew>(Services.TextService, opensDialog: true);
 
                     //no move action if this is a child doc type
                     if (parent == null)
                     {
-                        menu.Items.Add<ActionMove>(Services.TextService.Localize($"actions/{ActionMove.Instance.Alias}"), true);
+                        menu.Items.Add<ActionMove>(Services.TextService, true, opensDialog: true);
                     }
                 }
                 else
                 {
-                    menu.Items.Add<ActionMove>(Services.TextService.Localize($"actions/{ActionMove.Instance.Alias}"));
+                    menu.Items.Add<ActionMove>(Services.TextService, opensDialog: true);
                     //no move action if this is a child doc type
                     if (parent == null)
                     {
-                        menu.Items.Add<ActionMove>(Services.TextService.Localize($"actions/{ActionMove.Instance.Alias}"), true);
+                        menu.Items.Add<ActionMove>(Services.TextService, true, opensDialog: true);
                     }
                 }
 
-                menu.Items.Add<ActionCopy>(Services.TextService.Localize($"actions/{ActionCopy.Instance.Alias}"));
-                menu.Items.Add<ActionDelete>(Services.TextService.Localize($"actions/{ActionDelete.Instance.Alias}"));
+                menu.Items.Add<ActionCopy>(Services.TextService, opensDialog: true);
+                menu.Items.Add<ActionDelete>(Services.TextService, opensDialog: true);
                 if (enableInheritedMediaTypes)
-                    menu.Items.Add<RefreshNode, ActionRefresh>(Services.TextService.Localize(
-                        $"actions/{ActionRefresh.Instance.Alias}"), true);
+                    menu.Items.Add(new RefreshNode(Services.TextService, true));
             }
 
             return menu;
         }
 
-        public IEnumerable<SearchResultItem> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
+        public IEnumerable<SearchResultEntity> Search(string query, int pageSize, long pageIndex, out long totalFound, string searchFrom = null)
         {
-            var results = Services.EntityService.GetPagedDescendants(UmbracoObjectTypes.MediaType, pageIndex, pageSize, out totalFound, filter: query);
-            return Mapper.Map<IEnumerable<SearchResultItem>>(results);
+            var results = Services.EntityService.GetPagedDescendants(UmbracoObjectTypes.MediaType, pageIndex, pageSize, out totalFound,
+                filter: SqlContext.Query<IUmbracoEntity>().Where(x => x.Name.Contains(query)));
+            return Mapper.Map<IEnumerable<SearchResultEntity>>(results);
         }
     }
 }

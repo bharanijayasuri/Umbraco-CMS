@@ -6,8 +6,8 @@ using System.Linq;
 using System.Threading;
 using System.Xml.XPath;
 using Examine;
-using Examine.LuceneEngine.SearchCriteria;
 using Examine.Providers;
+using Examine.Search;
 using Lucene.Net.Store;
 using Umbraco.Core;
 using Umbraco.Core.Logging;
@@ -15,9 +15,9 @@ using Umbraco.Core.Models;
 using Umbraco.Core.Models.PublishedContent;
 using Umbraco.Core.Xml;
 using Umbraco.Examine;
-using umbraco;
 using Umbraco.Core.Cache;
 using Umbraco.Core.Services;
+using Umbraco.Core.Services.Implement;
 using Umbraco.Web.Composing;
 
 namespace Umbraco.Web.PublishedCache.XmlPublishedCache
@@ -38,14 +38,14 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
         // method GetExamineManagerSafe().
         //
         private readonly ISearcher _searchProvider;
-        private readonly IIndexer _indexProvider;
         private readonly XmlStore _xmlStore;
         private readonly PublishedContentTypeCache _contentTypeCache;
+        private readonly IEntityXmlSerializer _entitySerializer;
 
         // must be specified by the ctor
         private readonly ICacheProvider _cacheProvider;
 
-        public PublishedMediaCache(XmlStore xmlStore, IMediaService mediaService, IUserService userService, ICacheProvider cacheProvider, PublishedContentTypeCache contentTypeCache)
+        public PublishedMediaCache(XmlStore xmlStore, IMediaService mediaService, IUserService userService, ICacheProvider cacheProvider, PublishedContentTypeCache contentTypeCache, IEntityXmlSerializer entitySerializer)
             : base(false)
         {
             _mediaService = mediaService ?? throw new ArgumentNullException(nameof(mediaService));
@@ -54,6 +54,7 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
             _cacheProvider = cacheProvider;
             _xmlStore = xmlStore;
             _contentTypeCache = contentTypeCache;
+            _entitySerializer = entitySerializer;
         }
 
         /// <summary>
@@ -62,18 +63,18 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
         /// <param name="mediaService"></param>
         /// <param name="userService"></param>
         /// <param name="searchProvider"></param>
-        /// <param name="indexProvider"></param>
         /// <param name="cacheProvider"></param>
         /// <param name="contentTypeCache"></param>
-        internal PublishedMediaCache(IMediaService mediaService, IUserService userService, ISearcher searchProvider, BaseIndexProvider indexProvider, ICacheProvider cacheProvider, PublishedContentTypeCache contentTypeCache)
+        /// <param name="entitySerializer"></param>
+        internal PublishedMediaCache(IMediaService mediaService, IUserService userService, ISearcher searchProvider, ICacheProvider cacheProvider, PublishedContentTypeCache contentTypeCache, IEntityXmlSerializer entitySerializer)
             : base(false)
         {
             _mediaService = mediaService ?? throw new ArgumentNullException(nameof(mediaService));
             _userService = userService ?? throw new ArgumentNullException(nameof(userService));
             _searchProvider = searchProvider ?? throw new ArgumentNullException(nameof(searchProvider));
-            _indexProvider = indexProvider ?? throw new ArgumentNullException(nameof(indexProvider));
             _cacheProvider = cacheProvider;
             _contentTypeCache = contentTypeCache;
+            _entitySerializer = entitySerializer;
         }
 
         static PublishedMediaCache()
@@ -107,10 +108,10 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
                     // first check in Examine for the cache values
                     // +(+parentID:-1) +__IndexType:media
 
-                    var criteria = searchProvider.CreateCriteria("media");
-                    var filter = criteria.ParentId(-1).Not().Field(UmbracoExamineIndexer.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard());
+                    var criteria = searchProvider.CreateQuery("media");
+                    var filter = criteria.ParentId(-1).Not().Field(UmbracoExamineIndex.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard());
 
-                    var result = searchProvider.Search(filter.Compile());
+                    var result = filter.Execute();
                     if (result != null)
                         return result.Select(x => CreateFromCacheValues(ConvertFromSearchResult(x)));
                 }
@@ -240,8 +241,7 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
 
             try
             {
-                //by default use the internal index
-                return eMgr.GetSearcher(Constants.Examine.InternalIndexer);
+                return eMgr.TryGetIndex(Constants.UmbracoIndexes.InternalIndexName, out var index) ? index.GetSearcher() : null;
             }
             catch (FileNotFoundException)
             {
@@ -292,10 +292,10 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
                     //
                     // note that since the use of the wildcard, it automatically escapes it in Lucene.
 
-                    var criteria = searchProvider.CreateCriteria("media");
-                    var filter = criteria.Id(id.ToInvariantString()).Not().Field(UmbracoExamineIndexer.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard());
+                    var criteria = searchProvider.CreateQuery("media");
+                    var filter = criteria.Id(id.ToInvariantString()).Not().Field(UmbracoExamineIndex.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard());
 
-                    var result = searchProvider.Search(filter.Compile()).FirstOrDefault();
+                    var result = filter.Execute().FirstOrDefault();
                     if (result != null) return ConvertFromSearchResult(result);
                 }
                 catch (Exception ex)
@@ -353,13 +353,13 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
             return null;
         }
 
-        internal CacheValues ConvertFromSearchResult(SearchResult searchResult)
+        internal CacheValues ConvertFromSearchResult(ISearchResult searchResult)
         {
             // note: fixing fields in 7.x, removed by Shan for 8.0
 
             return new CacheValues
             {
-                Values = searchResult.Fields,
+                Values = searchResult.Values,
                 FromExamine = true
             };
         }
@@ -475,7 +475,7 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
             {
                 //We are going to check for a special field however, that is because in some cases we store a 'Raw'
                 //value in the index such as for xml/html.
-                var rawValue = dd.Properties.FirstOrDefault(x => x.Alias.InvariantEquals(UmbracoExamineIndexer.RawFieldPrefix + alias));
+                var rawValue = dd.Properties.FirstOrDefault(x => x.Alias.InvariantEquals(UmbracoExamineIndex.RawFieldPrefix + alias));
                 return rawValue
                        ?? dd.Properties.FirstOrDefault(x => x.Alias.InvariantEquals(alias));
             }
@@ -506,15 +506,15 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
                 try
                 {
                     //first check in Examine as this is WAY faster
-                    var criteria = searchProvider.CreateCriteria("media");
+                    var criteria = searchProvider.CreateQuery("media");
 
-                    var filter = criteria.ParentId(parentId).Not().Field(UmbracoExamineIndexer.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard());
+                    var filter = criteria.ParentId(parentId).Not().Field(UmbracoExamineIndex.IndexPathFieldName, "-1,-21,".MultipleCharacterWildcard())
+                        .OrderBy(new SortableField("sortOrder", SortType.Int));
                     //the above filter will create a query like this, NOTE: That since the use of the wildcard, it automatically escapes it in Lucene.
                     //+(+parentId:3113 -__Path:-1,-21,*) +__IndexType:media
 
                     // sort with the Sort field (updated for 8.0)
-                    var results = searchProvider.Search(
-                        filter.And().OrderBy(new SortableField("sortOrder", SortType.Int)).Compile());
+                    var results = filter.Execute();
 
                     if (results.Any())
                     {
@@ -555,14 +555,7 @@ namespace Umbraco.Web.PublishedCache.XmlPublishedCache
                 return Enumerable.Empty<IPublishedContent>();
             }
 
-            var serialized = EntityXmlSerializer.Serialize(
-                                Current.Services.MediaService,
-                                Current.Services.DataTypeService,
-                                Current.Services.UserService,
-                                Current.Services.LocalizationService,
-                                Current.UrlSegmentProviders,
-                                media,
-                                true);
+            var serialized = _entitySerializer.Serialize(media, true);
 
             var mediaIterator = serialized.CreateNavigator().Select("/");
 
